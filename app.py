@@ -52,7 +52,6 @@ class UniversalDownloader:
             return 'twitch'
         else:
             return 'unknown'
-
     def create_safe_filename(self, filename, max_length=100):
         """Create a safe filename"""
         # Remove invalid characters
@@ -162,7 +161,6 @@ class UniversalDownloader:
                 
         except Exception as e:
             return {'status': 'error', 'message': f'Instagram error: {str(e)}'}
-
     def download_tiktok_content(self, url, path):
         """Download TikTok videos"""
         try:
@@ -182,7 +180,6 @@ class UniversalDownloader:
                 }
         except Exception as e:
             return {'status': 'error', 'message': f'TikTok error: {str(e)}'}
-
     def download_twitter_content(self, url, path):
         """Download Twitter/X videos, images, threads"""
         try:
@@ -202,7 +199,6 @@ class UniversalDownloader:
                 }
         except Exception as e:
             return {'status': 'error', 'message': f'Twitter error: {str(e)}'}
-
     def download_facebook_content(self, url, path):
         """Download Facebook videos, posts"""
         try:
@@ -221,7 +217,6 @@ class UniversalDownloader:
                 }
         except Exception as e:
             return {'status': 'error', 'message': f'Facebook error: {str(e)}'}
-
     def download_reddit_content(self, url, path):
         """Download Reddit videos, images, gifs"""
         try:
@@ -239,7 +234,6 @@ class UniversalDownloader:
                 }
         except Exception as e:
             return {'status': 'error', 'message': f'Reddit error: {str(e)}'}
-
     def download_generic_content(self, url, path):
         """Download from any supported platform using yt-dlp"""
         try:
@@ -259,7 +253,6 @@ class UniversalDownloader:
                 }
         except Exception as e:
             return {'status': 'error', 'message': f'Download error: {str(e)}'}
-
     def extract_instagram_shortcode(self, url):
         """Extract shortcode from Instagram URL"""
         patterns = [
@@ -272,14 +265,12 @@ class UniversalDownloader:
             if match:
                 return match.group(1)
         return None
-
     def extract_instagram_username(self, url):
         """Extract username from Instagram URL"""
         match = re.search(r'instagram\.com/([^/?]+)', url)
         if match:
             return match.group(1)
         return None
-
     def download_content(self, url, custom_path=None):
         """Main download function"""
         path = custom_path or DOWNLOAD_DIR
