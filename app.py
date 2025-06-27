@@ -75,6 +75,11 @@ class UniversalDownloader:
             
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(url, download=True)
+                if not info:
+                    return {
+                        'status': 'error',
+                        'message': 'Failed to download. yt-dlp returned no data.'
+                    }
                 
                 if 'entries' in info:  # Playlist
                     titles = [entry.get('title', 'Unknown') for entry in info['entries'] if entry]
