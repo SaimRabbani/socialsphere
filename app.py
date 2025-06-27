@@ -62,39 +62,46 @@ class UniversalDownloader:
             filename = filename[:max_length]
         return filename
     
-    def download_youtube_content(self, url, path):
-        """Download YouTube videos, shorts, playlists"""
-        try:
-            ydl_opts = {
-                'outtmpl': os.path.join(path, '%(uploader)s - %(title)s.%(ext)s'),
-                'format': 'best[height<=1080]',
-                'writesubtitles': True,
-                'writeautomaticsub': True,
-                'subtitleslangs': ['en'],
-                'ignoreerrors': True,
-            }
-            
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                info = ydl.extract_info(url, download=True)
-                
-                if 'entries' in info:  # Playlist
-                    titles = [entry.get('title', 'Unknown') for entry in info['entries'] if entry]
-                    return {
-                        'status': 'success',
-                        'message': f'Downloaded {len(titles)} videos from playlist',
-                        'titles': titles[:5],  # Show first 5 titles
-                        'type': 'playlist'
-                    }
-                else:  # Single video
-                    return {
-                        'status': 'success',
-                        'message': 'YouTube content downloaded successfully!',
-                        'title': info.get('title', 'Unknown'),
-                        'uploader': info.get('uploader', 'Unknown'),
-                        'type': 'video'
-                    }
-        except Exception as e:
-            return {'status': 'error', 'message': f'YouTube error: {str(e)}'}
+   def download_youtube_content(self, url, path):
+    """Download YouTube videos, shorts, playlists"""
+    try:
+        ydl_opts = {
+            'outtmpl': os.path.join(path, '%(uploader)s - %(title)s.%(ext)s'),
+            'format': 'best[height<=1080]',
+            'writesubtitles': True,
+            'writeautomaticsub': True,
+            'subtitleslangs': ['en'],
+            'ignoreerrors': True,
+        }
+        
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=True)
+
+            if info is None:
+                return {
+                    'status': 'error',
+                    'message': 'Failed to download. yt-dlp returned no data.'
+                }
+
+            if isinstance(info, dict) and 'entries' in info:  # Playlist
+                titles = [entry.get('title', 'Unknown') for entry in info['entries'] if entry]
+                return {
+                    'status': 'success',
+                    'message': f'Downloaded {len(titles)} videos from playlist',
+                    'titles': titles[:5],
+                    'type': 'playlist'
+                }
+            else:  # Single video
+                return {
+                    'status': 'success',
+                    'message': 'YouTube content downloaded successfully!',
+                    'title': info.get('title', 'Unknown'),
+                    'uploader': info.get('uploader', 'Unknown'),
+                    'type': 'video'
+                }
+    except Exception as e:
+        return {'status': 'error', 'message': f'YouTube error: {str(e)}'}
+
     
     def download_instagram_content(self, url, path):
         """Download Instagram posts, reels, stories, IGTV"""
