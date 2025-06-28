@@ -52,6 +52,7 @@ class UniversalDownloader:
             return 'twitch'
         else:
             return 'unknown'
+
     def create_safe_filename(self, filename, max_length=100):
         """Create a safe filename"""
         # Remove invalid characters
@@ -61,32 +62,102 @@ class UniversalDownloader:
             filename = filename[:max_length]
         return filename
 
-    def download_youtube_content(self, url, path):
-        """Download YouTube videos, shorts, playlists"""
+    def test_url(self, url):
+        """Test if URL is valid and accessible"""
         try:
             ydl_opts = {
+                'quiet': True,
+                'no_warnings': True,
+                'simulate': True,
+            }
+            
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(url, download=False)
+                if info:
+                    return {
+                        'status': 'success',
+                        'title': info.get('title', 'Unknown'),
+                        'duration': info.get('duration', 0),
+                        'uploader': info.get('uploader', 'Unknown'),
+                        'available_formats': len(info.get('formats', []))
+                    }
+                else:
+                    return {'status': 'error', 'message': 'URL not accessible'}
+        except Exception as e:
+            return {'status': 'error', 'message': str(e)}
+
+    def download_youtube_content(self, url, path):
+        """Download YouTube videos, shorts, playlists with better error handling"""
+        try:
+            # First, try to extract info without downloading to validate the URL
+            ydl_opts_info = {
+                'quiet': True,
+                'no_warnings': True,
+            }
+            
+            with yt_dlp.YoutubeDL(ydl_opts_info) as ydl:
+                try:
+                    # Test if URL is valid and accessible
+                    info_test = ydl.extract_info(url, download=False)
+                    if not info_test:
+                        return {
+                            'status': 'error',
+                            'message': 'Invalid YouTube URL or content not accessible'
+                        }
+                except yt_dlp.utils.DownloadError as e:
+                    error_msg = str(e).lower()
+                    if 'private' in error_msg:
+                        return {'status': 'error', 'message': 'Video is private or unavailable'}
+                    elif 'age' in error_msg or 'sign in' in error_msg:
+                        return {'status': 'error', 'message': 'Age-restricted content - sign in required'}
+                    elif 'blocked' in error_msg or 'region' in error_msg:
+                        return {'status': 'error', 'message': 'Content blocked in your region'}
+                    elif 'removed' in error_msg or 'deleted' in error_msg:
+                        return {'status': 'error', 'message': 'Video has been removed or deleted'}
+                    else:
+                        return {'status': 'error', 'message': f'YouTube access error: {str(e)}'}
+                except Exception as e:
+                    return {'status': 'error', 'message': f'URL validation failed: {str(e)}'}
+            
+            # Now proceed with actual download
+            ydl_opts = {
                 'outtmpl': os.path.join(path, '%(uploader)s - %(title)s.%(ext)s'),
-                'format': 'best[height<=1080]',
+                'format': 'best[height<=1080]/best',  # Fallback format
                 'writesubtitles': True,
                 'writeautomaticsub': True,
                 'subtitleslangs': ['en'],
                 'ignoreerrors': True,
+                'retries': 3,
+                'fragment_retries': 3,
+                'extractor_retries': 3,
+                'http_headers': {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                }
             }
             
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(url, download=True)
+                
                 if not info:
                     return {
                         'status': 'error',
-                        'message': 'Failed to download. yt-dlp returned no data.'
+                        'message': 'Download failed - no content information received'
                     }
                 
                 if 'entries' in info:  # Playlist
-                    titles = [entry.get('title', 'Unknown') for entry in info['entries'] if entry]
+                    successful_downloads = [entry for entry in info['entries'] if entry]
+                    if not successful_downloads:
+                        return {
+                            'status': 'error',
+                            'message': 'Playlist exists but no videos could be downloaded'
+                        }
+                    
+                    titles = [entry.get('title', 'Unknown') for entry in successful_downloads]
                     return {
                         'status': 'success',
-                        'message': f'Downloaded {len(titles)} videos from playlist',
+                        'message': f'Downloaded {len(successful_downloads)} videos from playlist',
                         'titles': titles[:5],  # Show first 5 titles
+                        'total_count': len(successful_downloads),
                         'type': 'playlist'
                     }
                 else:  # Single video
@@ -95,10 +166,31 @@ class UniversalDownloader:
                         'message': 'YouTube content downloaded successfully!',
                         'title': info.get('title', 'Unknown'),
                         'uploader': info.get('uploader', 'Unknown'),
+                        'duration': info.get('duration', 0),
+                        'view_count': info.get('view_count', 0),
                         'type': 'video'
                     }
+                    
+        except yt_dlp.utils.DownloadError as e:
+            error_msg = str(e).lower()
+            if 'private' in error_msg or 'unavailable' in error_msg:
+                return {'status': 'error', 'message': 'Video is private, deleted, or unavailable'}
+            elif 'age' in error_msg or 'sign in' in error_msg:
+                return {'status': 'error', 'message': 'Age-restricted content requires authentication'}
+            elif 'blocked' in error_msg or 'region' in error_msg:
+                return {'status': 'error', 'message': 'Content is geo-blocked or restricted'}
+            elif 'format' in error_msg:
+                return {'status': 'error', 'message': 'No downloadable video format found'}
+            elif 'network' in error_msg or 'connection' in error_msg:
+                return {'status': 'error', 'message': 'Network connection error - please try again'}
+            else:
+                return {'status': 'error', 'message': f'Download error: {str(e)}'}
+        
+        except requests.exceptions.RequestException as e:
+            return {'status': 'error', 'message': f'Network error: {str(e)}'}
+        
         except Exception as e:
-            return {'status': 'error', 'message': f'YouTube error: {str(e)}'}
+            return {'status': 'error', 'message': f'Unexpected error: {str(e)}'}
 
     def download_instagram_content(self, url, path):
         """Download Instagram posts, reels, stories, IGTV"""
@@ -166,6 +258,7 @@ class UniversalDownloader:
                 
         except Exception as e:
             return {'status': 'error', 'message': f'Instagram error: {str(e)}'}
+
     def download_tiktok_content(self, url, path):
         """Download TikTok videos"""
         try:
@@ -185,6 +278,7 @@ class UniversalDownloader:
                 }
         except Exception as e:
             return {'status': 'error', 'message': f'TikTok error: {str(e)}'}
+
     def download_twitter_content(self, url, path):
         """Download Twitter/X videos, images, threads"""
         try:
@@ -204,6 +298,7 @@ class UniversalDownloader:
                 }
         except Exception as e:
             return {'status': 'error', 'message': f'Twitter error: {str(e)}'}
+
     def download_facebook_content(self, url, path):
         """Download Facebook videos, posts"""
         try:
@@ -222,6 +317,7 @@ class UniversalDownloader:
                 }
         except Exception as e:
             return {'status': 'error', 'message': f'Facebook error: {str(e)}'}
+
     def download_reddit_content(self, url, path):
         """Download Reddit videos, images, gifs"""
         try:
@@ -239,6 +335,7 @@ class UniversalDownloader:
                 }
         except Exception as e:
             return {'status': 'error', 'message': f'Reddit error: {str(e)}'}
+
     def download_generic_content(self, url, path):
         """Download from any supported platform using yt-dlp"""
         try:
@@ -258,6 +355,7 @@ class UniversalDownloader:
                 }
         except Exception as e:
             return {'status': 'error', 'message': f'Download error: {str(e)}'}
+
     def extract_instagram_shortcode(self, url):
         """Extract shortcode from Instagram URL"""
         patterns = [
@@ -270,12 +368,14 @@ class UniversalDownloader:
             if match:
                 return match.group(1)
         return None
+
     def extract_instagram_username(self, url):
         """Extract username from Instagram URL"""
         match = re.search(r'instagram\.com/([^/?]+)', url)
         if match:
             return match.group(1)
         return None
+
     def download_content(self, url, custom_path=None):
         """Main download function"""
         path = custom_path or DOWNLOAD_DIR
@@ -313,6 +413,26 @@ downloader = UniversalDownloader()
 def index():
     """Main page"""
     return render_template('index.html')
+
+@app.route('/validate-url', methods=['POST'])
+def validate_url():
+    """Validate URL before downloading"""
+    try:
+        data = request.get_json()
+        url = data.get('url', '').strip()
+        
+        if not url:
+            return jsonify({'status': 'error', 'message': 'URL is required'})
+        
+        # Test URL accessibility
+        result = downloader.test_url(url)
+        platform = downloader.detect_platform(url)
+        result['platform'] = platform
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': f'Validation error: {str(e)}'})
 
 @app.route('/download', methods=['POST'])
 def download():
